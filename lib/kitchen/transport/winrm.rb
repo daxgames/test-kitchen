@@ -31,7 +31,8 @@ require "logger"
 
 require "kitchen/errors"
 require "kitchen/login_command"
-require "zip"
+require 'kitchen/transport/winrm_file_transfer/remote_file'
+require 'kitchen/transport/winrm_file_transfer/remote_zip_file'
 
 module Kitchen
 
@@ -91,20 +92,47 @@ module Kitchen
         run(query, :wql)
       end
 
-      # (see Base#upload!)
-      def upload!(local, remote)
-        logger.debug("Upload: #{local} -> #{remote}")
-        local = Array.new(1) { local } if local.is_a? String
-        shell_id = session.open_shell
-        local.each do |path|
-          if File.directory?(path)
-            upload_directory(shell_id, path, remote)
-          else
-            upload_file(path, File.join(remote, File.basename(path)), shell_id)
-          end
-        end
+      # # (see Base#upload!)
+      # def upload!(local, remote)
+      #   op_limit = powershell("([xml](winrm get winrm/config/Service -format:xml)).Service.MaxConcurrentOperationsPerUser")[:data][0][:stdout].chomp
+      #   logger.debug("Upload: #{local} -> #{remote} :: maximum operations allowed #{op_limit}")
+      #   local = Array.new(1) { local } if local.is_a? String
+      #   shell_id = session.open_shell
+      #   local.each do |path|
+      #     if File.directory?(path)
+      #       upload_directory(shell_id, path, remote)
+      #     else
+      #       upload_file(path, File.join(remote, File.basename(path)), shell_id)
+      #     end
+      #   end
+      # ensure
+      #   session.close_shell(shell_id)
+      # end
+
+      # Upload one or more local files and directories to a remote directory
+      # @example copy a single directory to a winrm endpoint
+      #
+      #   file_manager.upload('c:/dev/my_dir', '$env:AppData')
+      #
+      # @example copy several paths to the winrm endpoint
+      #
+      #   file_manager.upload(['c:/dev/file1.txt','c:/dev/dir1'], '$env:AppData')
+      #
+      # @param [Array<String>] One or more paths that will be copied to the remote path.
+      #   These can be files or directories to be deeply copied
+      # @param [String] The directory on the remote endpoint to copy the local items to.
+      #   This path may contain powershell style environment variables
+      # @yieldparam [Fixnum] Number of bytes copied in current payload sent to the winrm endpoint
+      # @yieldparam [Fixnum] The total number of bytes to be copied
+      # @yieldparam [String] Path of file being copied
+      # @yieldparam [String] Target path on the winrm endpoint
+      # @return [Fixnum] The total number of bytes copied
+      def upload!(local_path, remote_path, &block)
+        local_path = [local_path] if local_path.is_a? String
+        file = create_remote_file(local_path, remote_path)
+        file.upload(&block)
       ensure
-        session.close_shell(shell_id)
+        file.close unless file.nil?
       end
 
       # Convert a complex CLIXML Error to a human readable format
@@ -182,6 +210,15 @@ module Kitchen
       end
 
       private
+
+      def create_remote_file(local_paths, remote_path)
+        if local_paths.count == 1 && !File.directory?(local_paths[0])
+          return WinRMFileTransfer::RemoteFile.new(logger, session, local_paths[0], remote_path)
+        end
+        zip_file = WinRMFileTransfer::RemoteZipFile.new(logger, session, remote_path)
+        local_paths.each { |path| zip_file.add_file(path) }
+        zip_file
+      end
 
       # (see Base#establish_connection)
       def establish_connection
