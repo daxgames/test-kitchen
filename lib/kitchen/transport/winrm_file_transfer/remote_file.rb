@@ -37,7 +37,7 @@ module Kitchen
             builder << is_dirty_command
           end
 
-          if should_upload
+          if should_upload == 'True'
             size = upload_to_remote(&block)
             powershell_batch {|builder| builder << create_post_upload_command}
           else
@@ -114,6 +114,7 @@ module Kitchen
           base64_array.each_slice(8000 - remote_path.size) do |chunk|
             shell.cmd("echo #{chunk.join} >> \"#{remote_path}\"")
             bytes_copied += chunk.count
+            logger.debug("Uploading chunk #{bytes_copied} bytes copied of #{base64_array.count} total bytes")
             yield bytes_copied, base64_array.count, local_path, remote_path if block_given?
           end
           base64_array.length
@@ -143,12 +144,13 @@ module Kitchen
             EOH
             idx += 1
           end
-          commands << "\"{\";$result.keys | % { write-output \"`\"$_`\": `\"$($result[$_])`\",\".Replace('\\','/')};\"}\""
+          commands << "\"{\";$result.keys | % { write-output \"`\"$_`\": `\"$($result[$_])`\",\".Replace('\\','\\\\')};\"}\""
 
           result = []
           begin
             result_hash = JSON.parse(shell.powershell(commands.join("\n")).gsub(",\r\n}","\n}"))
             result_hash.keys.sort.each do |key|
+              logger.debug("result key: #{key} is '#{result_hash[key]}'")
               result << result_hash[key] unless result_hash[key].nil?
             end
           rescue TransportFailed => tf

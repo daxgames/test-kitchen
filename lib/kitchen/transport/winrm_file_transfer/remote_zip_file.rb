@@ -10,7 +10,7 @@ module Kitchen
         def initialize(logger, service, remote_path)
           @archive = create_archive(remote_path)
           @unzip_remote_path = remote_path
-          remote_path = "$env:temp/WinRM_file_transfer"
+          remote_path = "$env:temp/WinRM_ft"
           super(logger, service, @archive, remote_path)
         end
 
@@ -51,7 +51,7 @@ module Kitchen
             $destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("#{@unzip_remote_path}")
             $shellApplication = new-object -com shell.application 
 
-            $zipPackage = $shellApplication.NameSpace('#{remote_path.gsub("/","\\")}') 
+            $zipPackage = $shellApplication.NameSpace('#{remote_path}') 
             mkdir $destination -ErrorAction SilentlyContinue | Out-Null
             $destinationFolder = $shellApplication.NameSpace($destination) 
             $destinationFolder.CopyHere($zipPackage.Items(),0x10) | Out-Null
