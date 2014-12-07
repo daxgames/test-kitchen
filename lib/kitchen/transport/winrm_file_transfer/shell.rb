@@ -6,8 +6,8 @@ module Kitchen
           @logger = logger
           @service = service
           @shell = reset
-          #@op_limit = powershell("([xml](winrm get winrm/config/Service -format:xml)).Service.MaxConcurrentOperationsPerUser")
-          @op_limit = 15
+          os_version = powershell("[environment]::OSVersion.Version.tostring()")
+          os_version < "6.2" ? @op_limit = 15 : @op_limit = 1500
           @op_limit = @op_limit - 2 #to be safe
         end
 
@@ -49,6 +49,7 @@ module Kitchen
           close unless @shell.nil?
           @shell = @service.open_shell
           @op_count = 0
+          @logger.debug("resetting winrm shell curent operation limit is #{@op_limit}")
           @shell
         end
 
