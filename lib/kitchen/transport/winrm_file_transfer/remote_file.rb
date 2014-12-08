@@ -39,11 +39,11 @@ module Kitchen
 
           if should_upload == 'True'
             size = upload_to_remote(&block)
-            powershell_batch {|builder| builder << create_post_upload_command}
           else
             size = 0
             logger.debug("Files are equal. Not copying #{local_path} to #{remote_path}")
           end
+          powershell_batch {|builder| builder << create_post_upload_command}
           size
         end
         
@@ -123,8 +123,13 @@ module Kitchen
         def decode_command
           <<-EOH
             $base64_string = Get-Content '#{remote_path}'
-            $bytes = [System.Convert]::FromBase64String($base64_string)
-            [System.IO.File]::WriteAllBytes('#{remote_path}', $bytes) | Out-Null
+            try {
+              $bytes = [System.Convert]::FromBase64String($base64_string)
+              if($bytes -ne $null){
+                [System.IO.File]::WriteAllBytes('#{remote_path}', $bytes) | Out-Null
+              }
+            }
+            catch{}
           EOH
         end
 
