@@ -115,6 +115,7 @@ module Kitchen
 
         cmd = <<-CMD.gsub(/^ {10}/, "")
           #{busser_setup_env}
+          mkdir -p #{config[:root_path]}/suites
           gem_bindir=`#{ruby} -rrubygems -e "puts Gem.bindir"`
 
           if ! #{gem} list busser -i >/dev/null; then
